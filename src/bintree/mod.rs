@@ -33,6 +33,15 @@ impl BinTree {
         Ok(())
     }
 
+    /// Adds all members of a collection (vector, array, whatever) to the tree,
+    /// skipping over any that would be duplicates, so no error will stop the batch.
+    pub fn add_all_skipping_duplicates<T: IntoIterator<Item = u32>>(&mut self, collection: T) -> Result<(),TreeError> {
+        for elem in collection.into_iter() {
+            let _ = self.add(elem);
+        }
+        Ok(())
+    }
+
     /// Get the number of values in the tree
     pub fn get_size(&self) -> u32 {
         self.size
@@ -158,6 +167,16 @@ mod tests {
             Err(TreeError::ValueAlreadyStored),
             my_tree.add(7) // can't add duplicates
         );
+    }
+
+    #[test]
+    fn add_collection() {
+        let mut my_tree = BinTree::new();
+        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates(vec!(1,2,3,4,5)));
+        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates([6,7,8,9,10]));
+        assert_eq!( 10, my_tree.get_size() );
+        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates([5,10,15,20])); // duplicates should NOT cause a panic
+        assert_eq!( 12, my_tree.get_size() ); // duplicates were skipped
     }
 
     #[test]
