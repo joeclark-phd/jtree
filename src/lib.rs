@@ -1,6 +1,6 @@
 pub mod bintree;
 pub mod avltree;
-
+pub mod errors;
 
 
 
