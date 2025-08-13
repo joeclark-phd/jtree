@@ -47,6 +47,15 @@ impl BinTree {
         self.size
     }
 
+    /// Returns true if the value is currently a member of the tree
+    pub fn contains(&self, value: &u32) -> bool {
+        if self.size == 0 {
+            return false;
+        } else {
+            return self.root.as_ref().unwrap().contains(value);
+        }
+    }
+
     /// Short for `as_vec_l_to_r`, this method returns all the values in the tree as an ordered Vec
     /// from least to greatest.
     pub fn as_vec(&self) -> Vec<u32> {
@@ -121,6 +130,34 @@ impl Node {
         }
     }
 
+    /// Returns true if the value is currently a member of the (sub)tree
+    pub fn contains(&self, value: &u32) -> bool {
+        if *value == self.value {
+            return true;
+        }
+        if value < &self.value {
+            match &self.left {
+                Some(node) => node.contains(value),
+                None => return false
+            }
+        } else {
+            match &self.right {
+                Some(node) => node.contains(value),
+                None => return false
+            }
+        }
+    }
+
+    /// If the value is in the tree, delete it.  Otherwise a TreeError::ValueNotFound will be returned.
+    pub fn drop(&mut self, value: u32) -> Result<(),TreeError> {
+        // if root has the value:
+        // - if it has no leaves, just replace it with None
+        // - if it has leaves but no child branches, replace its value with its right leaf (and drop that leaf)
+        //   - unless it only has a left leaf, in that case replace it with its left leaf
+        // - if it has child branches, replace its value with its immediate successor, then recursively tell its right branch to remove that successor
+        Ok(())
+    }
+
     /// Recursively add values to the borrowed vector, traversing the tree from left to right.
     pub fn collect_values_l_to_r(&self, value_vector: &mut Vec<u32>) {
         match &self.left {
@@ -177,6 +214,15 @@ mod tests {
         assert_eq!( 10, my_tree.get_size() );
         assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates([5,10,15,20])); // duplicates should NOT cause a panic
         assert_eq!( 12, my_tree.get_size() ); // duplicates were skipped
+    }
+
+    #[test]
+    fn test_contains() {
+        let mut my_tree = BinTree::new();
+        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates(vec!(8,6,7,5,3,0,9)));
+        assert_eq!( 7, my_tree.get_size() );
+        assert!( my_tree.contains(&7) );
+        assert!( my_tree.contains(&8) );
     }
 
     #[test]
