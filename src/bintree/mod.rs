@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::errors::TreeError;
 
 
@@ -9,7 +11,7 @@ use crate::errors::TreeError;
 /// 
 /// TODO: make generic
 pub struct BinTree {
-    root: Option<Node>,
+    root: Option<Rc<RefCell<Node>>>,
     size: u32,
 }
 
@@ -26,8 +28,8 @@ impl BinTree {
     /// Insert a value
     pub fn add(&mut self, value: u32) -> Result<(),TreeError> {
         match &mut self.root {
-            None => self.root = Some(Node::new(value)),
-            Some(branch) => branch.add(value)?,
+            None => self.root = Some(Rc::new(RefCell::new(Node::new(value)))),
+            Some(branch) => branch.as_ref().borrow_mut().add(value)?,
         }
         self.size += 1;
         Ok(())
@@ -52,7 +54,7 @@ impl BinTree {
         if self.size == 0 {
             return false;
         } else {
-            return self.root.as_ref().unwrap().contains(value);
+            return self.root.as_ref().unwrap().borrow().contains(value);
         }
     }
 
@@ -68,7 +70,7 @@ impl BinTree {
             return Vec::new();
         } else {
             let mut vals = Vec::new();
-            self.root.as_ref().unwrap().collect_values_l_to_r(&mut vals);
+            self.root.as_ref().unwrap().borrow().collect_values_l_to_r(&mut vals);
             vals
         }
     }
@@ -79,9 +81,66 @@ impl BinTree {
             return Vec::new();
         } else {
             let mut vals = Vec::new();
-            self.root.as_ref().unwrap().collect_values_r_to_l(&mut vals);
+            self.root.as_ref().unwrap().borrow().collect_values_r_to_l(&mut vals);
             vals
         }
+    }
+
+    /// If the value is in the tree, delete it.  Otherwise a TreeError::ValueNotFound will be returned.
+    pub fn drop(&mut self, value: u32) -> Result<(),TreeError> {
+        // if no root exists: return TreeError::ValueNotFound
+        if self.root.is_none() {
+            return Err(TreeError::ValueNotFound);
+        }
+        // if root has the value:
+        if self.root.as_ref().unwrap().borrow().value == value {
+            // - if it has no children, just replace it with None
+            if self.root.as_ref().unwrap().borrow().is_leaf() {
+                self.root = None;
+                self.size = 0;
+                return Ok(());
+            }
+            // - if it has no left branch, replace it with its right child (and subtree)
+            if self.root.as_ref().unwrap().borrow().left.is_none() {
+                let temp = self.root.as_ref().unwrap().borrow().right.clone();
+                self.root = temp;
+                self.size -= 1;
+                return Ok(());
+            }
+            // - if it has no right branch, replace it with its left child (and subtree)
+            if self.root.as_ref().unwrap().borrow().right.is_none() {
+                let temp = self.root.as_ref().unwrap().borrow().left.clone();
+                self.root = temp;
+                self.size -= 1;
+                return Ok(());
+            }
+            // - if the root's right child is a leaf, replace its value with its right leaf (and drop that leaf)
+            if self.root.as_ref().unwrap().borrow().right.as_ref().unwrap().borrow().is_leaf() {
+                let val = self.root.as_ref().unwrap().borrow().right.as_ref().unwrap().borrow().value;
+                self.root.as_mut().unwrap().borrow_mut().value = val;
+                self.root.as_ref().unwrap().borrow_mut().right = None;
+                self.size -= 1;
+                return Ok(());
+            }
+            // - otherwise, if the root's left child is a leaf, replace its value with its left leaf (and drop that leaf)
+            if self.root.as_ref().unwrap().borrow().left.as_ref().unwrap().borrow().is_leaf() {
+                let val = self.root.as_ref().unwrap().borrow().left.as_ref().unwrap().borrow().value;
+                self.root.as_mut().unwrap().borrow_mut().value = val;
+                self.root.as_ref().unwrap().borrow_mut().left = None;
+                self.size -= 1;
+                return Ok(());
+            }
+            // - if we get to this point, both children are branches. Replace the root's value with its immediate successor, 
+            //   then recursively tell its right branch to remove that successor
+        }
+        // if root does NOT have the value:
+        // - if the value is less, 
+        //   - if the root has a left child, recursively call 'drop' on the left
+        //   - otherwise throw ValueNotFound
+        // - if the value is greater,
+        //   - if the root has a right child, recursively call 'drop' on the right
+        //   - otherwise throw ValueNotFound
+        Ok(())
     }
 
 }
@@ -94,8 +153,8 @@ impl Default for BinTree {
 
 struct Node {
     value: u32,
-    left: Option<Box<Node>>,
-    right: Option<Box<Node>>,
+    left: Option<Rc<RefCell<Node>>>,
+    right: Option<Rc<RefCell<Node>>>,
 }
 
 impl Node {
@@ -108,6 +167,7 @@ impl Node {
         }
     }
 
+    /// Insert a value
     pub fn add(&mut self, value: u32) -> Result<(),TreeError> {
         if value == self.value {
             // no duplicates allowed in this kind of tree
@@ -116,15 +176,15 @@ impl Node {
         if value < self.value {
             // add to the left branch
             match &mut self.left {
-                None => self.left = Some(Box::new(Node::new(value))),
-                Some(branch) => branch.add(value)?,
+                None => self.left = Some(Rc::new(RefCell::new(Node::new(value)))),
+                Some(branch) => branch.borrow_mut().add(value)?,
             }
             return Ok(())
         } else {
             // add it to the right branch
             match &mut self.right {
-                None => self.right = Some(Box::new(Node::new(value))),
-                Some(branch) => branch.add(value)?,
+                None => self.right = Some(Rc::new(RefCell::new(Node::new(value)))),
+                Some(branch) => branch.borrow_mut().add(value)?,
             }
             return Ok(())
         }
@@ -137,36 +197,31 @@ impl Node {
         }
         if value < &self.value {
             match &self.left {
-                Some(node) => node.contains(value),
+                Some(node) => node.borrow().contains(value),
                 None => return false
             }
         } else {
             match &self.right {
-                Some(node) => node.contains(value),
+                Some(node) => node.borrow().contains(value),
                 None => return false
             }
         }
     }
 
-    /// If the value is in the tree, delete it.  Otherwise a TreeError::ValueNotFound will be returned.
-    pub fn drop(&mut self, value: u32) -> Result<(),TreeError> {
-        // if root has the value:
-        // - if it has no leaves, just replace it with None
-        // - if it has leaves but no child branches, replace its value with its right leaf (and drop that leaf)
-        //   - unless it only has a left leaf, in that case replace it with its left leaf
-        // - if it has child branches, replace its value with its immediate successor, then recursively tell its right branch to remove that successor
-        Ok(())
+    /// Returns true if the node is a leaf or terminal node, with no child nodes of its own.
+    pub fn is_leaf(&self) -> bool {
+        self.left.is_none() && self.right.is_none()
     }
 
     /// Recursively add values to the borrowed vector, traversing the tree from left to right.
     pub fn collect_values_l_to_r(&self, value_vector: &mut Vec<u32>) {
         match &self.left {
-            Some(node) => node.collect_values_l_to_r(value_vector),
+            Some(node) => node.borrow().collect_values_l_to_r(value_vector),
             None => (),
         }
         value_vector.push(self.value.clone());
         match &self.right {
-            Some(node) => node.collect_values_l_to_r(value_vector),
+            Some(node) => node.borrow().collect_values_l_to_r(value_vector),
             None => (),
         }
     }
@@ -174,12 +229,12 @@ impl Node {
     /// Recursively add values to the borrowed vector, traversing the tree from right to left.
     pub fn collect_values_r_to_l(&self, value_vector: &mut Vec<u32>) {
         match &self.right {
-            Some(node) => node.collect_values_r_to_l(value_vector),
+            Some(node) => node.borrow().collect_values_r_to_l(value_vector),
             None => (),
         }
         value_vector.push(self.value.clone());
         match &self.left {
-            Some(node) => node.collect_values_r_to_l(value_vector),
+            Some(node) => node.borrow().collect_values_r_to_l(value_vector),
             None => (),
         }
     }
@@ -245,6 +300,64 @@ mod tests {
         let output = my_tree.as_vec_r_to_l();
         println!("{:?}", output);
         assert_eq!(vec!(7,5,3), output);
+    }
+
+    #[test]
+    fn test_dropping_values() {
+
+        // an empty tree
+        let mut my_tree = BinTree::new();
+        assert_eq!( 0, my_tree.get_size() );
+        assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop(1) );
+
+        // a tree with only a root node
+        let mut my_tree = BinTree::new();
+        let _ = my_tree.add(1);
+        assert_eq!( 1, my_tree.get_size() );
+        //assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop(4) );
+        assert_eq!( Ok(()), my_tree.drop(1) );
+        assert_eq!( 0, my_tree.get_size() );
+
+        // an unbalanced tree with no left branch from the root
+        let mut my_tree = BinTree::new();
+        let _ = my_tree.add_all_skipping_duplicates([1,2,3]);
+        assert_eq!( 1, my_tree.root.as_ref().unwrap().borrow().value ); // root is 1
+        assert_eq!( 3, my_tree.get_size() );
+        //assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop(4) );
+        assert_eq!( Ok(()), my_tree.drop(1) );
+        assert_eq!( vec!(2,3), my_tree.as_vec_l_to_r() );
+        assert_eq!( 2, my_tree.get_size() );
+
+        // an unbalanced tree with no right branch from the root
+        let mut my_tree = BinTree::new();
+        let _ = my_tree.add_all_skipping_duplicates([3,1,2]);
+        assert_eq!( 3, my_tree.root.as_ref().unwrap().borrow().value ); // root is 3
+        assert_eq!( 3, my_tree.get_size() );
+        //assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop(4) );
+        assert_eq!( Ok(()), my_tree.drop(3) );
+        assert_eq!( vec!(1,2), my_tree.as_vec_l_to_r() );
+        assert_eq!( 2, my_tree.get_size() );
+
+        // a tree where the root has two leaves
+        let mut my_tree = BinTree::new();
+        let _ = my_tree.add_all_skipping_duplicates([2,1,3]);
+        assert_eq!( 2, my_tree.root.as_ref().unwrap().borrow().value ); // root is 2
+        assert_eq!( 3, my_tree.get_size() );
+        //assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop(4) );
+        assert_eq!( Ok(()), my_tree.drop(2) );
+        assert_eq!( vec!(1,3), my_tree.as_vec_l_to_r() );
+        assert_eq!( 2, my_tree.get_size() );
+
+        // a tree where the root has a leaf on the left, branching node on the right
+        let mut my_tree = BinTree::new();
+        let _ = my_tree.add_all_skipping_duplicates([2,1,5,3,7]);
+        assert_eq!( 2, my_tree.root.as_ref().unwrap().borrow().value ); // root is 2
+        assert_eq!( 5, my_tree.get_size() );
+        //assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop(4) );
+        assert_eq!( Ok(()), my_tree.drop(2) );
+        assert_eq!( vec!(1,3,5,7), my_tree.as_vec_l_to_r() );
+        assert_eq!( 4, my_tree.get_size() );
+
     }
 
 }
