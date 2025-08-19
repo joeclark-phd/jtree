@@ -1,4 +1,4 @@
-pub mod bintree;
+pub mod binsearchtree;
 pub mod avltree;
 pub mod errors;
 

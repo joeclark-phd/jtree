@@ -1,9 +1,9 @@
 
 
-use jtree::bintree::BinTree;
+use jtree::binsearchtree::BinSearchTree;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut my_tree = BinTree::new();
+    let mut my_tree = BinSearchTree::new();
     my_tree.add(5)?;
     my_tree.add(1)?;
     my_tree.add(3)?;
