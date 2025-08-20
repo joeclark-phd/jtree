@@ -2,7 +2,7 @@
 
 This package contains my own implementations of some of the classic "tree" data structures in Rust, such as:
 
-- `BinSearchTree`: a simple binary search tree storing unique values in order
+- `Jbst`: a simple binary search tree storing unique values in order
 
 # operations
 

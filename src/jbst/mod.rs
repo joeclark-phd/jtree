@@ -1,19 +1,38 @@
+use std::fmt;
+
 use crate::errors::TreeError;
 
 
 
+/// # Joe's Binary Search Tree
+/// 
 /// My implementation of a regular (unbalanced) **binary search tree**
 /// for unique values (no duplicates).
+///
+///     use jtree::Jbst;
+///     use jtree::errors::TreeError;
+/// 
+///     let mut my_tree = Jbst::new();
+///     let _ = my_tree.add(2);
+///     let _ = my_tree.add(1);
+///     let _ = my_tree.add(3);
+///     assert_eq!( 3, my_tree.get_size() );
+///     assert_eq!( vec!(1,2,3), my_tree.as_vec() );
+///     assert_eq!( Err(TreeError::ValueAlreadyStored), my_tree.add(1) ); // unique values only!
+/// 
+///     let mut tree_b = Jbst::from_collection([1,1,2,3,5]); // duplicate values are ignored but no error is thrown
+///     assert_eq!( vec!(1,2,3,5), tree_b.as_vec() ); // the array was effectively converted into a set
+///     assert!( tree_b.contains(&5) ); // fast test for set membership
 /// 
 /// Currently holds "u32" data.
 /// 
 /// TODO: make generic
-pub struct BinSearchTree {
+pub struct Jbst {
     root: Option<Box<Node>>,
     size: u32,
 }
 
-impl BinSearchTree {
+impl Jbst {
 
     /// Create a new tree with no data
     pub fn new() -> Self {
@@ -21,6 +40,14 @@ impl BinSearchTree {
             root: None,
             size: 0,
         }
+    }
+
+    /// Create a new tree from a collection (vector, array, or whatever), skipping duplicates, effectively 
+    /// turning a list into an ordered set of unique values.
+    pub fn from_collection<T: IntoIterator<Item = u32>>(collection: T) -> Self {
+        let mut new_tree = Self::new();
+        let _ = new_tree.add_all_skipping_duplicates(collection);
+        new_tree
     }
 
     /// Insert a value
@@ -33,7 +60,7 @@ impl BinSearchTree {
         Ok(())
     }
 
-    /// Adds all members of a collection (vector, array, whatever) to the tree,
+    /// Adds all members of a collection (vector, array, or whatever) to the tree,
     /// skipping over any that would be duplicates, so no error will stop the batch.
     pub fn add_all_skipping_duplicates<T: IntoIterator<Item = u32>>(&mut self, collection: T) -> Result<(),TreeError> {
         for elem in collection.into_iter() {
@@ -135,9 +162,18 @@ impl BinSearchTree {
 
 }
 
-impl Default for BinSearchTree {
+impl Default for Jbst {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl fmt::Debug for Jbst {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("Jbst")
+            .field("size", &self.get_size())
+            .field("values", &self.as_vec())
+            .finish()
     }
 }
 
@@ -338,7 +374,7 @@ mod tests {
 
     #[test]
     fn add_unique_items() {
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( 0, my_tree.get_size() );
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
@@ -352,7 +388,7 @@ mod tests {
 
     #[test]
     fn add_collection() {
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates(vec!(1,2,3,4,5)));
         assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates([6,7,8,9,10]));
         assert_eq!( 10, my_tree.get_size() );
@@ -362,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_contains() {
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates(vec!(8,6,7,5,3,0,9)));
         assert_eq!( 7, my_tree.get_size() );
         assert!( my_tree.contains(&7) );
@@ -371,7 +407,7 @@ mod tests {
 
     #[test]
     fn collect_values_l_to_r() {
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
         assert_eq!( Ok(()), my_tree.add(7) );
@@ -382,7 +418,7 @@ mod tests {
 
     #[test]
     fn collect_values_r_to_l() {
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
         assert_eq!( Ok(()), my_tree.add(7) );
@@ -395,12 +431,12 @@ mod tests {
     fn test_dropping_values() {
 
         // an empty tree
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( 0, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(1) );
 
         // a tree with only a root node
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         let _ = my_tree.add(1);
         assert_eq!( 1, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
@@ -408,7 +444,7 @@ mod tests {
         assert_eq!( 0, my_tree.get_size() );
 
         // an unbalanced tree with no left branch from the root
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         let _ = my_tree.add_all_skipping_duplicates([1,2,3]);
         assert_eq!( Some(1), my_tree.get_root_value() ); // root is 1
         assert_eq!( 3, my_tree.get_size() );
@@ -418,7 +454,7 @@ mod tests {
         assert_eq!( 2, my_tree.get_size() );
 
         // an unbalanced tree with no right branch from the root
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         let _ = my_tree.add_all_skipping_duplicates([3,1,2]);
         assert_eq!( Some(3), my_tree.get_root_value() ); // root is 3
         assert_eq!( 3, my_tree.get_size() );
@@ -428,7 +464,7 @@ mod tests {
         assert_eq!( 2, my_tree.get_size() );
 
         // a tree where the root has two leaves
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         let _ = my_tree.add_all_skipping_duplicates([2,1,3]);
         assert_eq!( Some(2), my_tree.get_root_value() ); // root is 2
         assert_eq!( 3, my_tree.get_size() );
@@ -438,7 +474,7 @@ mod tests {
         assert_eq!( 2, my_tree.get_size() );
 
         // a tree where the root has a leaf on the left, branching node on the right
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         let _ = my_tree.add_all_skipping_duplicates([2,1,5,3,7]);
         assert_eq!( Some(2), my_tree.get_root_value() ); // root is 2
         assert_eq!( 5, my_tree.get_size() );
@@ -448,7 +484,7 @@ mod tests {
         assert_eq!( 4, my_tree.get_size() );
 
         // a tree where the root has branching nodes on both sides
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         let _ = my_tree.add_all_skipping_duplicates([5,3,8,1,2,7,9]);
         assert_eq!( Some(5), my_tree.get_root_value() ); // root is 5
         assert_eq!( 7, my_tree.get_size() );
@@ -462,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_greatest_and_least() {
-        let mut my_tree = BinSearchTree::new();
+        let mut my_tree = Jbst::new();
         assert_eq!( None, my_tree.least_value() );
         assert_eq!( None, my_tree.greatest_value() );
         let _ = my_tree.add_all_skipping_duplicates([5,3,8,1,2,7,9]);
