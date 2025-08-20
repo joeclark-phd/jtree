@@ -6,13 +6,13 @@ use crate::errors::TreeError;
 
 /// # Joe's Binary Search Tree
 /// 
-/// My implementation of a regular (unbalanced) **binary search tree**
-/// for unique values (no duplicates).
+/// My implementation of a regular (unbalanced) **binary search tree** for unique values (no duplicates).
+/// Serves as an "ordered set" with fast lookups to confirm whether values are present in the set.
 ///
 ///     use jtree::Jbst;
 ///     use jtree::errors::TreeError;
 /// 
-///     let mut my_tree = Jbst::new();
+///     let mut my_tree = Jbst::new(); // or Jbst::<u32>::new()
 ///     let _ = my_tree.add(2);
 ///     let _ = my_tree.add(1);
 ///     let _ = my_tree.add(3);
@@ -24,15 +24,13 @@ use crate::errors::TreeError;
 ///     assert_eq!( vec!(1,2,3,5), tree_b.as_vec() ); // the array was effectively converted into a set
 ///     assert!( tree_b.contains(&5) ); // fast test for set membership
 /// 
-/// Currently holds "u32" data.
-/// 
-/// TODO: make generic
-pub struct Jbst {
-    root: Option<Box<Node>>,
+/// Can hold any data type that supports PartialEq + PartialOrd + Clone.
+pub struct Jbst<T: PartialEq + PartialOrd + Clone> {
+    root: Option<Box<Node<T>>>,
     size: u32,
 }
 
-impl Jbst {
+impl <T: PartialEq + PartialOrd + Clone> Jbst<T> {
 
     /// Create a new tree with no data
     pub fn new() -> Self {
@@ -44,14 +42,14 @@ impl Jbst {
 
     /// Create a new tree from a collection (vector, array, or whatever), skipping duplicates, effectively 
     /// turning a list into an ordered set of unique values.
-    pub fn from_collection<T: IntoIterator<Item = u32>>(collection: T) -> Self {
+    pub fn from_collection<U: IntoIterator<Item = T>>(collection: U) -> Self {
         let mut new_tree = Self::new();
         let _ = new_tree.add_all_skipping_duplicates(collection);
         new_tree
     }
 
     /// Insert a value
-    pub fn add(&mut self, value: u32) -> Result<(),TreeError> {
+    pub fn add(&mut self, value: T) -> Result<(),TreeError> {
         match &mut self.root {
             None => self.root = Some(Box::new(Node::new(value))),
             Some(branch) => branch.add(value)?, // TODO: handle errors if any are possible
@@ -62,7 +60,7 @@ impl Jbst {
 
     /// Adds all members of a collection (vector, array, or whatever) to the tree,
     /// skipping over any that would be duplicates, so no error will stop the batch.
-    pub fn add_all_skipping_duplicates<T: IntoIterator<Item = u32>>(&mut self, collection: T) -> Result<(),TreeError> {
+    pub fn add_all_skipping_duplicates<U: IntoIterator<Item = T>>(&mut self, collection: U) -> Result<(),TreeError> {
         for elem in collection.into_iter() {
             let _ = self.add(elem);
         }
@@ -76,15 +74,15 @@ impl Jbst {
 
     /// Returns the 'value' field of the root node; used for automated tests only
     #[cfg(test)]
-    fn get_root_value(&self) -> Option<u32> {
+    fn get_root_value(&self) -> Option<T> {
         return match &self.root {
             None => None,
-            Some(node) => Some(node.value),
+            Some(node) => Some(node.value.clone()),
         }
     }
 
     /// Returns true if the value is currently a member of the tree
-    pub fn contains(&self, value: &u32) -> bool {
+    pub fn contains(&self, value: &T) -> bool {
         return match &self.root {
             None => false,
             Some(branch) => branch.contains(value), 
@@ -93,12 +91,12 @@ impl Jbst {
 
     /// Short for `as_vec_l_to_r`, this method returns all the values in the tree as an ordered Vec
     /// from least to greatest.
-    pub fn as_vec(&self) -> Vec<u32> {
+    pub fn as_vec(&self) -> Vec<T> {
         self.as_vec_l_to_r()
     }
 
     /// Returns all the values in the tree as an ordered Vec from least to greatest (left to right).
-    pub fn as_vec_l_to_r(&self) -> Vec<u32> {
+    pub fn as_vec_l_to_r(&self) -> Vec<T> {
         return match &self.root {
             None => Vec::new(),
             Some(branch) => {
@@ -110,7 +108,7 @@ impl Jbst {
     }
 
     /// Returns all the values in the tree as an ordered Vec from greatest to least  (right to left).
-    pub fn as_vec_r_to_l(&self) -> Vec<u32> {
+    pub fn as_vec_r_to_l(&self) -> Vec<T> {
         return match &self.root {
             None => Vec::new(),
             Some(branch) => {
@@ -122,7 +120,7 @@ impl Jbst {
     }
 
     /// Returns the smallest/lowest value in the tree, if any.
-    pub fn least_value(&self) -> Option<u32> {
+    pub fn least_value(&self) -> Option<T> {
         return match &self.root {
             None => None,
             Some(subtree) => Some(subtree.least_value()),
@@ -130,7 +128,7 @@ impl Jbst {
     }
 
     /// Returns the largest/highest value in the tree, if any.
-    pub fn greatest_value(&self) -> Option<u32> {
+    pub fn greatest_value(&self) -> Option<T> {
         return match &self.root {
             None => None,
             Some(subtree) => Some(subtree.greatest_value()),
@@ -138,7 +136,7 @@ impl Jbst {
     }
 
     /// If the value is in the tree, delete it.  Otherwise a TreeError::ValueNotFound will be returned.
-    pub fn drop_value(&mut self, value: u32) -> Result<(),TreeError> {
+    pub fn drop_value(&mut self, value: T) -> Result<(),TreeError> {
         match self.root.take() {
             None => {
                 self.root = None;
@@ -162,13 +160,13 @@ impl Jbst {
 
 }
 
-impl Default for Jbst {
+impl <T: PartialEq + PartialOrd + Clone> Default for Jbst<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl fmt::Debug for Jbst {
+impl <T: PartialEq + PartialOrd + Clone + std::fmt::Debug> fmt::Debug for Jbst<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("Jbst")
             .field("size", &self.get_size())
@@ -177,15 +175,15 @@ impl fmt::Debug for Jbst {
     }
 }
 
-struct Node {
-    value: u32,
-    left: Option<Box<Node>>,
-    right: Option<Box<Node>>,
+struct Node<T: PartialEq + PartialOrd + Clone> {
+    value: T,
+    left: Option<Box<Node<T>>>,
+    right: Option<Box<Node<T>>>,
 }
 
-impl Node {
+impl <T:PartialEq + PartialOrd + Clone> Node<T> {
 
-    pub fn new(value: u32) -> Self {
+    pub fn new(value: T) -> Self {
         Self {
             value,
             left: None,
@@ -194,7 +192,7 @@ impl Node {
     }
 
     /// Insert a value
-    pub fn add(&mut self, value: u32) -> Result<(),TreeError> {
+    pub fn add(&mut self, value: T) -> Result<(),TreeError> {
         if value == self.value {
             // no duplicates allowed in this kind of tree
             return Err(TreeError::ValueAlreadyStored)
@@ -217,7 +215,7 @@ impl Node {
     }
 
     /// Returns true if the value is currently a member of the (sub)tree
-    pub fn contains(&self, value: &u32) -> bool {
+    pub fn contains(&self, value: &T) -> bool {
         if *value == self.value {
             return true;
         }
@@ -240,23 +238,23 @@ impl Node {
     }
 
     /// Returns the smallest/lowest value in this (sub)tree.
-    pub fn least_value(&self) -> u32 {
+    pub fn least_value(&self) -> T {
         return match &self.left {
-            None => self.value,
+            None => self.value.clone(),
             Some(left_child) => left_child.least_value(),
         }
     }
 
     /// Returns the largest/highest value in this (sub)tree.
-    pub fn greatest_value(&self) -> u32 {
+    pub fn greatest_value(&self) -> T {
         return match &self.right {
-            None => self.value,
+            None => self.value.clone(),
             Some(right_child) => right_child.greatest_value(),
         }
     }
 
     /// Recursively add values to the borrowed vector, traversing the tree from left to right.
-    pub fn collect_values_l_to_r(&self, value_vector: &mut Vec<u32>) {
+    pub fn collect_values_l_to_r(&self, value_vector: &mut Vec<T>) {
         match &self.left {
             Some(node) => node.collect_values_l_to_r(value_vector),
             None => (),
@@ -269,7 +267,7 @@ impl Node {
     }
 
     /// Recursively add values to the borrowed vector, traversing the tree from right to left.
-    pub fn collect_values_r_to_l(&self, value_vector: &mut Vec<u32>) {
+    pub fn collect_values_r_to_l(&self, value_vector: &mut Vec<T>) {
         match &self.right {
             Some(node) => node.collect_values_r_to_l(value_vector),
             None => (),
@@ -289,7 +287,7 @@ impl Node {
     /// even in case of error, hence we're returning a tuple of Result (to be interpreted)
     /// and Option<Box<Node>> to replace the current node in the parent.
     /// 
-    pub fn drop_value(mut self, value: u32) -> (Result<(),TreeError>, Option<Box<Node>>) {
+    pub fn drop_value(mut self, value: T) -> (Result<(),TreeError>, Option<Box<Node<T>>>) {
 
         // if the value is less than this node's value, and we have a left child, call 'drop_value' on the left child
         if value < self.value {
@@ -344,21 +342,21 @@ impl Node {
             // - if the root's right child is a leaf, replace its value with its right leaf (and drop that leaf)
             let right_child = self.right.as_ref().unwrap();
             if right_child.is_leaf() {
-                self.value = right_child.value;
+                self.value = right_child.value.clone();
                 self.right = None;
                 return (Ok(()), Some(Box::new(self)));
             }
             // - otherwise, if the root's left child is a leaf, replace its value with its left leaf (and drop that leaf)
             let left_child = self.left.as_ref().unwrap();
             if left_child.is_leaf() {
-                self.value = left_child.value;
+                self.value = left_child.value.clone();
                 self.left = None;
                 return (Ok(()), Some(Box::new(self)));
             }
             // - if we get to this point, both children are branches. Replace the root's value with its immediate successor, 
             //   then recursively tell its right branch to remove that successor
             self.value = right_child.least_value();
-            self.right = self.right.unwrap().drop_value(self.value).1;
+            self.right = self.right.unwrap().drop_value(self.value.clone()).1;
             return (Ok(()), Some(Box::new(self)));
         }
 
@@ -374,7 +372,7 @@ mod tests {
 
     #[test]
     fn add_unique_items() {
-        let mut my_tree = Jbst::new();
+        let mut my_tree = Jbst::<u32>::new();
         assert_eq!( 0, my_tree.get_size() );
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
@@ -445,12 +443,12 @@ mod tests {
 
         // an unbalanced tree with no left branch from the root
         let mut my_tree = Jbst::new();
-        let _ = my_tree.add_all_skipping_duplicates([1,2,3]);
-        assert_eq!( Some(1), my_tree.get_root_value() ); // root is 1
+        let _ = my_tree.add_all_skipping_duplicates(['A','B','C']);
+        assert_eq!( Some('A'), my_tree.get_root_value() ); // root is 1
         assert_eq!( 3, my_tree.get_size() );
-        assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
-        assert_eq!( Ok(()), my_tree.drop_value(1) );
-        assert_eq!( vec!(2,3), my_tree.as_vec_l_to_r() );
+        assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value('Z') );
+        assert_eq!( Ok(()), my_tree.drop_value('A') );
+        assert_eq!( vec!('B','C'), my_tree.as_vec_l_to_r() );
         assert_eq!( 2, my_tree.get_size() );
 
         // an unbalanced tree with no right branch from the root
