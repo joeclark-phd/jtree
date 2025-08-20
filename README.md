@@ -2,7 +2,8 @@
 
 This package contains my own implementations of some of the classic "tree" data structures in Rust, such as:
 
-- `Jbst`: a simple binary search tree storing unique values in order
+- `Jbst`: a simple binary search tree storing unique values in order (i.e. an ordered set)
+- `Jblst`: a simple binary (list-like) search tree allowing duplicate entries (i.e. an ordered list)
 
 # operations
 
@@ -22,6 +23,10 @@ Some types may support:
 
 # usage
 
-Not ready for use yet.  Run tests with:
+See individual modules for rustdocs.  Run tests with:
 
     cargo test
+
+Build the docs with:
+
+    cargo doc

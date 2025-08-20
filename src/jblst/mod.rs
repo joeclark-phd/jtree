@@ -4,33 +4,32 @@ use crate::errors::TreeError;
 
 
 
-/// # Joe's Binary Search Tree
+/// # Joe's Binary (List-like) Search Tree
 /// 
-/// My implementation of a regular (unbalanced) **binary search tree** for unique values (no duplicates).
-/// Serves as an "ordered set" with fast lookups to confirm whether values are present in the set.
+/// My implementation of a regular (unbalanced) **binary search tree** which allows duplicates.
+/// Serves as an "ordered list" with fast lookups and traversals.
 ///
-///     use jtree::Jbst;
+///     use jtree::Jblst;
 ///     use jtree::errors::TreeError;
 /// 
-///     let mut my_tree = Jbst::new(); // or Jbst::<u32>::new()
+///     let mut my_tree = Jblst::new(); // or Jblst::<u32>::new()
 ///     let _ = my_tree.add(2);
 ///     let _ = my_tree.add(1);
 ///     let _ = my_tree.add(3);
 ///     assert_eq!( 3, my_tree.get_size() );
 ///     assert_eq!( vec!(1,2,3), my_tree.as_vec() );
-///     assert_eq!( Err(TreeError::ValueAlreadyStored), my_tree.add(1) ); // unique values only!
 /// 
-///     let mut tree_b = Jbst::from_collection([1,1,2,3,5]); // duplicate values are ignored but no error is thrown
-///     assert_eq!( vec!(1,2,3,5), tree_b.as_vec() ); // the array was effectively converted into a set
-///     assert!( tree_b.contains(&5) ); // fast test for set membership
+///     let mut tree_b = Jblst::from_collection([3,3,2,2,1,1]); // duplicate values are allowed with this type
+///     assert_eq!( vec!(1,1,2,2,3,3), tree_b.as_vec() ); // the list was ordered and duplicates preserved
+///     assert!( tree_b.contains(&2) ); // fast test for set membership
 /// 
 /// Can hold any data type that supports PartialEq + PartialOrd + Clone.
-pub struct Jbst<T: PartialEq + PartialOrd + Clone> {
+pub struct Jblst<T: PartialEq + PartialOrd + Clone> {
     root: Option<Box<Node<T>>>,
     size: u32,
 }
 
-impl <T: PartialEq + PartialOrd + Clone> Jbst<T> {
+impl <T: PartialEq + PartialOrd + Clone> Jblst<T> {
 
     /// Create a new tree with no data
     pub fn new() -> Self {
@@ -40,11 +39,10 @@ impl <T: PartialEq + PartialOrd + Clone> Jbst<T> {
         }
     }
 
-    /// Create a new tree from a collection (vector, array, or whatever), skipping duplicates, effectively 
-    /// turning a list into an ordered set of unique values.
+    /// Create a new tree from a collection (vector, array, or whatever).
     pub fn from_collection<U: IntoIterator<Item = T>>(collection: U) -> Self {
         let mut new_tree = Self::new();
-        let _ = new_tree.add_all_skipping_duplicates(collection);
+        let _ = new_tree.add_all(collection);
         new_tree
     }
 
@@ -58,14 +56,8 @@ impl <T: PartialEq + PartialOrd + Clone> Jbst<T> {
         Ok(())
     }
 
-    /// Alias for add_all_skipping_duplicates. Adds all members of a collection (vector, array, or whatever) to the tree.
+    /// Adds all members of a collection (vector, array, or whatever) to the tree.
     pub fn add_all<U: IntoIterator<Item = T>>(&mut self, collection: U) -> Result<(),TreeError> {
-        self.add_all_skipping_duplicates(collection)
-    }
-
-    /// Adds all members of a collection (vector, array, or whatever) to the tree,
-    /// skipping over any that would be duplicates, so no error will stop the batch.
-    pub fn add_all_skipping_duplicates<U: IntoIterator<Item = T>>(&mut self, collection: U) -> Result<(),TreeError> {
         for elem in collection.into_iter() {
             let _ = self.add(elem);
         }
@@ -165,15 +157,15 @@ impl <T: PartialEq + PartialOrd + Clone> Jbst<T> {
 
 }
 
-impl <T: PartialEq + PartialOrd + Clone> Default for Jbst<T> {
+impl <T: PartialEq + PartialOrd + Clone> Default for Jblst<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl <T: PartialEq + PartialOrd + Clone + std::fmt::Debug> fmt::Debug for Jbst<T> {
+impl <T: PartialEq + PartialOrd + Clone + std::fmt::Debug> fmt::Debug for Jblst<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("Jbst")
+        fmt.debug_struct("Jblst")
             .field("size", &self.get_size())
             .field("values", &self.as_vec())
             .finish()
@@ -182,6 +174,7 @@ impl <T: PartialEq + PartialOrd + Clone + std::fmt::Debug> fmt::Debug for Jbst<T
 
 struct Node<T: PartialEq + PartialOrd + Clone> {
     value: T,
+    count: usize, // duplicate values are counted, rather than getting new nodes
     left: Option<Box<Node<T>>>,
     right: Option<Box<Node<T>>>,
 }
@@ -191,6 +184,7 @@ impl <T:PartialEq + PartialOrd + Clone> Node<T> {
     pub fn new(value: T) -> Self {
         Self {
             value,
+            count: 1,
             left: None,
             right: None,
         }
@@ -199,8 +193,9 @@ impl <T:PartialEq + PartialOrd + Clone> Node<T> {
     /// Insert a value
     pub fn add(&mut self, value: T) -> Result<(),TreeError> {
         if value == self.value {
-            // no duplicates allowed in this kind of tree
-            return Err(TreeError::ValueAlreadyStored)
+            // increment the count
+            self.count += 1;
+            return Ok(());
         }
         if value < self.value {
             // add to the left branch
@@ -208,14 +203,14 @@ impl <T:PartialEq + PartialOrd + Clone> Node<T> {
                 None => self.left = Some(Box::new(Node::new(value))),
                 Some(branch) => branch.add(value)?,
             }
-            return Ok(())
+            return Ok(());
         } else {
             // add it to the right branch
             match &mut self.right {
                 None => self.right = Some(Box::new(Node::new(value))),
                 Some(branch) => branch.add(value)?,
             }
-            return Ok(())
+            return Ok(());
         }
     }
 
@@ -264,7 +259,7 @@ impl <T:PartialEq + PartialOrd + Clone> Node<T> {
             Some(node) => node.collect_values_l_to_r(value_vector),
             None => (),
         }
-        value_vector.push(self.value.clone());
+        value_vector.extend(vec![self.value.clone(); self.count]);
         match &self.right {
             Some(node) => node.collect_values_l_to_r(value_vector),
             None => (),
@@ -277,7 +272,7 @@ impl <T:PartialEq + PartialOrd + Clone> Node<T> {
             Some(node) => node.collect_values_r_to_l(value_vector),
             None => (),
         }
-        value_vector.push(self.value.clone());
+        value_vector.extend(vec![self.value.clone(); self.count]);
         match &self.left {
             Some(node) => node.collect_values_r_to_l(value_vector),
             None => (),
@@ -332,6 +327,11 @@ impl <T:PartialEq + PartialOrd + Clone> Node<T> {
         }
         // if this node has the exact value:
         else {
+            // - if it's a duplicate (count >= 2), just decrement the count
+            if self.count > 1 {
+                self.count -= 1;
+                return ( Ok(()), Some(Box::new(self)) );
+            }
             // - if it has no children, just replace it with None
             if self.is_leaf() {
                 return (Ok(()), None);
@@ -376,70 +376,70 @@ mod tests {
     use super::*;
 
     #[test]
-    fn add_unique_items() {
-        let mut my_tree = Jbst::<u32>::new();
+    fn add_duplicate_items() {
+        let mut my_tree = Jblst::<u32>::new();
         assert_eq!( 0, my_tree.get_size() );
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
         assert_eq!( Ok(()), my_tree.add(7) );
         assert_eq!( 3, my_tree.get_size() );
-        assert_eq!(
-            Err(TreeError::ValueAlreadyStored),
-            my_tree.add(7) // can't add duplicates
-        );
+        assert_eq!( Ok(()), my_tree.add(7) ); // duplicates allowed
+        assert_eq!( 4, my_tree.get_size() );
     }
 
     #[test]
     fn add_collection() {
-        let mut my_tree = Jbst::new();
-        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates(vec!(1,2,3,4,5)));
-        assert_eq!( Ok(()), my_tree.add_all([6,7,8,9,10])); // alias for add_all_skipping_duplicates
+        let mut my_tree = Jblst::new();
+        assert_eq!( Ok(()), my_tree.add_all(vec!(1,2,3,4,5)));
+        assert_eq!( Ok(()), my_tree.add_all([6,7,8,9,10]));
         assert_eq!( 10, my_tree.get_size() );
-        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates([5,10,15,20])); // duplicates should NOT cause a panic
-        assert_eq!( 12, my_tree.get_size() ); // duplicates were skipped
+        assert_eq!( Ok(()), my_tree.add_all([5,10,15,20]));
+        assert_eq!( 14, my_tree.get_size() ); // duplicates were inlcuded
     }
 
     #[test]
     fn test_contains() {
-        let mut my_tree = Jbst::new();
-        assert_eq!( Ok(()), my_tree.add_all_skipping_duplicates(vec!(8,6,7,5,3,0,9)));
+        let mut my_tree = Jblst::new();
+        assert_eq!( Ok(()), my_tree.add_all(vec!(8,6,7,5,3,0,9)));
         assert_eq!( 7, my_tree.get_size() );
         assert!( my_tree.contains(&7) );
-        assert!( my_tree.contains(&8) );
+        assert!( !my_tree.contains(&1) );
     }
 
     #[test]
     fn collect_values_l_to_r() {
-        let mut my_tree = Jbst::new();
+        let mut my_tree = Jblst::new();
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
         assert_eq!( Ok(()), my_tree.add(7) );
+        assert_eq!( Ok(()), my_tree.add(7) );
         let output = my_tree.as_vec();
         println!("{:?}", output);
-        assert_eq!(vec!(3,5,7), output);
+        assert_eq!(vec!(3,5,7,7), output);
     }
 
     #[test]
     fn collect_values_r_to_l() {
-        let mut my_tree = Jbst::new();
+        let mut my_tree = Jblst::new();
+        assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(5) );
         assert_eq!( Ok(()), my_tree.add(3) );
         assert_eq!( Ok(()), my_tree.add(7) );
         let output = my_tree.as_vec_r_to_l();
         println!("{:?}", output);
-        assert_eq!(vec!(7,5,3), output);
+        assert_eq!(vec!(7,5,5,3), output);
     }
 
     #[test]
     fn test_dropping_values() {
 
         // an empty tree
-        let mut my_tree = Jbst::new();
+        let mut my_tree = Jblst::new();
         assert_eq!( 0, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(1) );
 
         // a tree with only a root node
-        let mut my_tree = Jbst::new();
+        let mut my_tree = Jblst::new();
         let _ = my_tree.add(1);
         assert_eq!( 1, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
@@ -447,8 +447,8 @@ mod tests {
         assert_eq!( 0, my_tree.get_size() );
 
         // an unbalanced tree with no left branch from the root
-        let mut my_tree = Jbst::new();
-        let _ = my_tree.add_all_skipping_duplicates(['A','B','C']);
+        let mut my_tree = Jblst::new();
+        let _ = my_tree.add_all(['A','B','C']);
         assert_eq!( Some('A'), my_tree.get_root_value() ); // root is 1
         assert_eq!( 3, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value('Z') );
@@ -457,8 +457,8 @@ mod tests {
         assert_eq!( 2, my_tree.get_size() );
 
         // an unbalanced tree with no right branch from the root
-        let mut my_tree = Jbst::new();
-        let _ = my_tree.add_all_skipping_duplicates([3,1,2]);
+        let mut my_tree = Jblst::new();
+        let _ = my_tree.add_all([3,1,2]);
         assert_eq!( Some(3), my_tree.get_root_value() ); // root is 3
         assert_eq!( 3, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
@@ -467,8 +467,8 @@ mod tests {
         assert_eq!( 2, my_tree.get_size() );
 
         // a tree where the root has two leaves
-        let mut my_tree = Jbst::new();
-        let _ = my_tree.add_all_skipping_duplicates([2,1,3]);
+        let mut my_tree = Jblst::new();
+        let _ = my_tree.add_all([2,1,3]);
         assert_eq!( Some(2), my_tree.get_root_value() ); // root is 2
         assert_eq!( 3, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
@@ -477,8 +477,8 @@ mod tests {
         assert_eq!( 2, my_tree.get_size() );
 
         // a tree where the root has a leaf on the left, branching node on the right
-        let mut my_tree = Jbst::new();
-        let _ = my_tree.add_all_skipping_duplicates([2,1,5,3,7]);
+        let mut my_tree = Jblst::new();
+        let _ = my_tree.add_all([2,1,5,3,7]);
         assert_eq!( Some(2), my_tree.get_root_value() ); // root is 2
         assert_eq!( 5, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
@@ -487,8 +487,8 @@ mod tests {
         assert_eq!( 4, my_tree.get_size() );
 
         // a tree where the root has branching nodes on both sides
-        let mut my_tree = Jbst::new();
-        let _ = my_tree.add_all_skipping_duplicates([5,3,8,1,2,7,9]);
+        let mut my_tree = Jblst::new();
+        let _ = my_tree.add_all([5,3,8,1,2,7,9]);
         assert_eq!( Some(5), my_tree.get_root_value() ); // root is 5
         assert_eq!( 7, my_tree.get_size() );
         assert_eq!( Err(TreeError::ValueNotFound), my_tree.drop_value(4) );
@@ -501,10 +501,10 @@ mod tests {
 
     #[test]
     fn test_greatest_and_least() {
-        let mut my_tree = Jbst::new();
+        let mut my_tree = Jblst::new();
         assert_eq!( None, my_tree.least_value() );
         assert_eq!( None, my_tree.greatest_value() );
-        let _ = my_tree.add_all_skipping_duplicates([5,3,8,1,2,7,9]);
+        let _ = my_tree.add_all([5,3,8,1,2,7,9]);
         assert_eq!( Some(1), my_tree.least_value() );
         assert_eq!( Some(9), my_tree.greatest_value() );
     }
