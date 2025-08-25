@@ -36,6 +36,20 @@ impl <T: PartialEq + PartialOrd + Clone> Javlt<T> {
         Ok(())
     }
 
+    /// Get the number of values in the tree
+    pub fn get_size(&self) -> u32 {
+        self.size
+    }
+
+    /// Returns the 'value' field of the root node; used for automated tests only
+    #[cfg(test)]
+    fn get_root_value(&self) -> Option<T> {
+        return match &self.root {
+            None => None,
+            Some(node) => Some(node.value.clone()),
+        }
+    }
+
     /// Returns true if the value is currently a member of the tree
     pub fn contains(&self, value: &T) -> bool {
         return match &self.root {
@@ -117,8 +131,6 @@ impl <T: PartialEq + PartialOrd + Clone> Node<T> {
             return Err(TreeError::ValueAlreadyStored)
         }
 
-        // TODO: modify the below to rotate the subtree in order to maintain balance
-
         if value < self.value {
             // add to the left branch
             match &mut self.left {
@@ -126,11 +138,7 @@ impl <T: PartialEq + PartialOrd + Clone> Node<T> {
                 Some(branch) => branch.add(value)?,
             }
             self.height = self.compute_height();
-            let bf = self.compute_balancing_factor();
-            if bf < -1 || bf > 1 {
-                // rebalance!
-                println!("bf is {:?}. we need to rebalance", bf);
-            }
+            self.rebalance();
             return Ok(())
         } else {
             // add it to the right branch
@@ -139,11 +147,7 @@ impl <T: PartialEq + PartialOrd + Clone> Node<T> {
                 Some(branch) => branch.add(value)?,
             }
             self.height = self.compute_height();
-            let bf = self.compute_balancing_factor();
-            if bf < -1 || bf > 1 {
-                // rebalance!
-                println!("bf is {:?}. we need to rebalance", bf);
-            }
+            self.rebalance();
             return Ok(())
         }
     }
@@ -155,12 +159,81 @@ impl <T: PartialEq + PartialOrd + Clone> Node<T> {
         max(left_height, right_height) + 1
     }
 
-    /// Balancing factor is the height of the left subtree minus the height of the right subtree.
+    /// Balancing factor is the height of the right subtree minus the height of the left subtree.
     /// Although this will never be outside the range -2 to +2, we use i64 for safe type casting.
     fn compute_balancing_factor(&self) -> i64 {
         let left_height = if self.left.is_none() {0} else {self.left.as_ref().unwrap().height};
         let right_height = if self.right.is_none() {0} else {self.right.as_ref().unwrap().height};
-        i64::from(left_height) - i64::from(right_height)
+        i64::from(right_height) - i64::from(left_height)
+    }
+
+    fn rebalance(&mut self) {
+        let bf = self.compute_balancing_factor();
+        if bf >= -1 && bf <= 1 {
+            // tree is balanced, do nothing
+            return;
+        }
+        if bf > 1 {
+            // tree is right-heavy
+            if self.right.as_ref().unwrap().compute_balancing_factor() > 0 {
+                // right child is right-heavy, this is a Right Right rotation
+                let mut new_left_node = Node::new(self.value.clone());
+                new_left_node.left = self.left.take();
+                new_left_node.right = self.right.as_mut().unwrap().left.take();
+                self.left = Some(Box::new(new_left_node));
+                self.value = self.right.as_ref().unwrap().value.clone();
+                let new_right_node = self.right.as_mut().unwrap().right.take();
+                self.right = new_right_node;
+            } else {
+                // right child is left-heavy, this is a Right Left situation
+                // step 1: rotate the right child's subtree right
+                let mut new_right_right = Node::new(self.right.as_ref().unwrap().value.clone());
+                new_right_right.right = self.right.as_mut().unwrap().right.take();
+                new_right_right.left = self.right.as_mut().unwrap().left.as_mut().unwrap().right.take();
+                let mut new_right = Node::new(self.right.as_ref().unwrap().left.as_ref().unwrap().value.clone());
+                new_right.right = Some(Box::new(new_right_right));
+                new_right.left = self.right.as_mut().unwrap().left.as_mut().unwrap().left.take();
+                self.right = Some(Box::new(new_right));
+                // step 2: rotate our subtree left (as in the above Right Right case)
+                let mut new_left_node = Node::new(self.value.clone());
+                new_left_node.left = self.left.take();
+                new_left_node.right = self.right.as_mut().unwrap().left.take();
+                self.left = Some(Box::new(new_left_node));
+                self.value = self.right.as_ref().unwrap().value.clone();
+                let final_right_node = self.right.as_mut().unwrap().right.take();
+                self.right = final_right_node;
+            }
+        } else {
+            // tree is left-heavy
+            if self.left.as_ref().unwrap().compute_balancing_factor() < 0 {
+                // left child is left-heavy, this is a Left Left rotation
+                let mut new_right_node = Node::new(self.value.clone());
+                new_right_node.right = self.right.take();
+                new_right_node.left = self.left.as_mut().unwrap().right.take();
+                self.right = Some(Box::new(new_right_node));
+                self.value = self.left.as_ref().unwrap().value.clone();
+                let new_left_node = self.left.as_mut().unwrap().left.take();
+                self.left = new_left_node;
+            } else {
+                // left child is right-heavy, this is a Right Left rotation
+                // step 1: rotate the left child's subtree left
+                let mut new_left_left = Node::new(self.left.as_ref().unwrap().value.clone());
+                new_left_left.left = self.left.as_mut().unwrap().left.take();
+                new_left_left.right = self.left.as_mut().unwrap().right.as_mut().unwrap().left.take();
+                let mut new_left = Node::new(self.left.as_ref().unwrap().right.as_ref().unwrap().value.clone());
+                new_left.left = Some(Box::new(new_left_left));
+                new_left.right = self.left.as_mut().unwrap().right.as_mut().unwrap().right.take();
+                self.left = Some(Box::new(new_left));
+                // step 2: rotate our subtree right (as in the above Left Left case)
+                let mut new_right_node = Node::new(self.value.clone());
+                new_right_node.right = self.right.take();
+                new_right_node.left = self.left.as_mut().unwrap().right.take();
+                self.right = Some(Box::new(new_right_node));
+                self.value = self.left.as_ref().unwrap().value.clone();
+                let final_left_node = self.left.as_mut().unwrap().left.take();
+                self.left = final_left_node;
+            }
+        }
     }
 
     /// Returns true if the value is currently a member of the (sub)tree
@@ -222,5 +295,97 @@ impl <T: PartialEq + PartialOrd + Clone> Node<T> {
             None => (),
         }
     }
+
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn do_left_left_rebalance() {
+        let mut my_tree = Javlt::<u32>::new();
+        assert_eq!( 0, my_tree.get_size() );
+        assert_eq!( Ok(()), my_tree.add(5) );
+        assert_eq!( Ok(()), my_tree.add(3) );
+        assert_eq!( Some(5), my_tree.get_root_value() );
+        assert_eq!( Ok(()), my_tree.add(1) );
+        // this results in a Left Left unbalanced tree; it should automatically be rebalanced so 3 instead of 5 is the root
+        assert_eq!( Some(3), my_tree.get_root_value() );
+        assert_eq!( 0, my_tree.root.as_ref().unwrap().compute_balancing_factor() );
+
+        assert_eq!( 3, my_tree.get_size() );
+        assert_eq!(
+            Err(TreeError::ValueAlreadyStored),
+            my_tree.add(5) // can't add duplicates
+        );
+    }
+
+    #[test]
+    fn do_right_right_rebalance() {
+        let mut my_tree = Javlt::<u32>::new();
+        assert_eq!( 0, my_tree.get_size() );
+        assert_eq!( Ok(()), my_tree.add(2) );
+        assert_eq!( Ok(()), my_tree.add(4) );
+        assert_eq!( Some(2), my_tree.get_root_value() );
+        assert_eq!( Ok(()), my_tree.add(6) );
+        // this results in a Right Right unbalanced tree; it should automatically be rebalanced so 4 instead of 2 is the root
+        assert_eq!( Some(4), my_tree.get_root_value() );
+        assert_eq!( 0, my_tree.root.as_ref().unwrap().compute_balancing_factor() );
+
+        assert_eq!( 3, my_tree.get_size() );
+        assert_eq!(
+            Err(TreeError::ValueAlreadyStored),
+            my_tree.add(4) // can't add duplicates
+        );
+    }
+
+    #[test]
+    fn do_left_right_rebalance() {
+        let mut my_tree = Javlt::<u32>::new();
+        assert_eq!( 0, my_tree.get_size() );
+        assert_eq!( Ok(()), my_tree.add(2) );
+        assert_eq!( Ok(()), my_tree.add(1) );
+        assert_eq!( Ok(()), my_tree.add(6) );
+        assert_eq!( Ok(()), my_tree.add(4) );
+        assert_eq!( Ok(()), my_tree.add(7) );
+        assert_eq!( Some(2), my_tree.get_root_value() );
+        assert_eq!( Ok(()), my_tree.add(3) );
+        // this results in a Left Right unbalanced tree; it should automatically be rebalanced so 4 instead of 2 is the root
+        assert_eq!( Some(4), my_tree.get_root_value() );
+        assert_eq!( 0, my_tree.root.as_ref().unwrap().compute_balancing_factor() );
+
+        assert_eq!( 6, my_tree.get_size() );
+        assert_eq!(
+            Err(TreeError::ValueAlreadyStored),
+            my_tree.add(7) // can't add duplicates
+        );
+    }
+
+    #[test]
+    fn do_right_left_rebalance() {
+        let mut my_tree = Javlt::<u32>::new();
+        assert_eq!( 0, my_tree.get_size() );
+        assert_eq!( Ok(()), my_tree.add(6) );
+        assert_eq!( Ok(()), my_tree.add(3) );
+        assert_eq!( Ok(()), my_tree.add(7) );
+        assert_eq!( Ok(()), my_tree.add(2) );
+        assert_eq!( Ok(()), my_tree.add(4) );
+        assert_eq!( Some(6), my_tree.get_root_value() );
+        assert_eq!( Ok(()), my_tree.add(5) );
+        // this results in a Right Left unbalanced tree; it should automatically be rebalanced so 4 instead of 6 is the root
+        assert_eq!( Some(4), my_tree.get_root_value() );
+        assert_eq!( 0, my_tree.root.as_ref().unwrap().compute_balancing_factor() );
+
+        assert_eq!( 6, my_tree.get_size() );
+        assert_eq!(
+            Err(TreeError::ValueAlreadyStored),
+            my_tree.add(7) // can't add duplicates
+        );
+    }
+
+
 
 }
