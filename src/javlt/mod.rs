@@ -1,4 +1,4 @@
-use std::{cmp::max, i32::MAX};
+use std::{cmp::max, fmt, i32::MAX};
 
 use crate::errors::TreeError;
 
@@ -150,6 +150,22 @@ impl <T: PartialEq + PartialOrd + Clone> Javlt<T> {
     }
 
 }
+
+impl <T: PartialEq + PartialOrd + Clone> Default for Javlt<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl <T: PartialEq + PartialOrd + Clone + std::fmt::Debug> fmt::Debug for Javlt<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("Javlt")
+            .field("size", &self.get_size())
+            .field("values", &self.as_vec())
+            .finish()
+    }
+}
+
 
 struct Node<T: PartialEq + PartialOrd + Clone> {
     value: T,
