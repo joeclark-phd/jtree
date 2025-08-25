@@ -4,6 +4,7 @@ This package contains my own implementations of some of the classic "tree" data 
 
 - `Jbst`: a simple binary search tree storing unique values in order (i.e. an ordered set)
 - `Jblst`: a simple binary (list-like) search tree allowing duplicate entries (i.e. an ordered list)
+- `Javlt`: an AVL balanced binary searh tree, storing unique values in order (i.e. an ordered set) with guaranteed O(log(n)) lookups
 
 # operations
 
